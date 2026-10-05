@@ -1,4 +1,4 @@
-## 0.1.0
+## 1.0.0
 
 * Initial release.
 * `showSimpleFeedback()` dialog with type selection (bug / suggestion /

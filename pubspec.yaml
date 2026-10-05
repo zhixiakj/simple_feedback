@@ -4,7 +4,9 @@ description: >-
   selection, screenshot attachments (embedded into Firestore documents by
   default, or uploaded to Firebase Storage), automatic page capture,
   anonymous device id, and built-in zh/en/ja strings.
-version: 0.1.0
+version: 1.0.0
+repository: https://github.com/zhixiakj/simple_feedback
+issue_tracker: https://github.com/zhixiakj/simple_feedback/issues
 topics:
   - feedback
   - widget

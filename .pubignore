@@ -1,0 +1,23 @@
+# NOTE: when this file exists, pub ignores .gitignore when deciding which files
+# to publish. Keep it in sync with .gitignore, plus package-private entries.
+
+# Internal docs that should not be uploaded to pub.dev.
+firebase_setup_zh.md
+
+# Build artifacts (unanchored to also cover example/build).
+build/
+.dart_tool/
+
+# IDE files.
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Flutter/Dart tooling.
+pubspec.lock
+.flutter-plugins-dependencies
+
+# Misc.
+.DS_Store
+.zcode/
