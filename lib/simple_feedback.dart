@@ -18,6 +18,8 @@ export 'src/feedback_config.dart';
 export 'src/feedback_device_id.dart';
 export 'src/feedback_dialog.dart'
     show showSimpleFeedback, captureBoundary;
+export 'src/feedback_image_pipeline.dart';
+export 'src/feedback_image_storage.dart';
 export 'src/feedback_service.dart';
 export 'src/feedback_strings.dart';
 export 'src/feedback_type.dart';

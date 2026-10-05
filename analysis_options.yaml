@@ -1,4 +1,9 @@
 include: package:flutter_lints/flutter.yaml
 
+analyzer:
+  exclude:
+    # SPM 检出的 firebase 包源码含自带 example，避免污染分析
+    - build/**
+
 # Additional information about this file can be found at
 # https://dart.dev/guides/language/analysis-options

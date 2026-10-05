@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:simple_feedback/simple_feedback.dart';
+import 'package:simple_feedback/src/feedback_draft.dart';
 
 class _RecordingService extends FeedbackService {
   _RecordingService({this.error});
@@ -18,9 +19,11 @@ class _RecordingService extends FeedbackService {
     required String content,
     required String source,
     required String deviceId,
+    String? email,
     String? sourceData,
     Map<String, dynamic>? metadata,
     List<Uint8List> images = const [],
+    FeedbackImageStorage imageStorage = FeedbackImageStorage.firestore,
     String collection = 'feedback',
     String storagePrefix = 'feedback',
   }) async {
@@ -30,9 +33,11 @@ class _RecordingService extends FeedbackService {
       'content': content,
       'source': source,
       'deviceId': deviceId,
+      'email': email,
       'sourceData': sourceData,
       'metadata': metadata,
       'images': images,
+      'imageStorage': imageStorage,
     });
   }
 }
@@ -41,6 +46,7 @@ void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues({});
     FeedbackDeviceId.resetForTests();
+    FeedbackDraftStore.resetForTest();
   });
 
   Future<void> pumpWithDialog(
@@ -74,7 +80,8 @@ void main() {
     await tester.pump(const Duration(milliseconds: 350)); // entrance animation
   }
 
-  testWidgets('renders with built-in English strings by default', (tester) async {
+  testWidgets('renders with built-in English strings by default',
+      (tester) async {
     await pumpWithDialog(tester);
     expect(find.text('Send feedback'), findsOneWidget);
     expect(find.text('Bug'), findsOneWidget);
@@ -95,10 +102,40 @@ void main() {
     expect(find.text('问题反馈'), findsOneWidget);
   });
 
-  testWidgets('empty content focuses the field instead of submitting', (tester) async {
-    final service = _RecordingService();
-    await pumpWithDialog(tester, config: SimpleFeedbackConfig(service: service));
+  testWidgets('tapping outside a text field dismisses the keyboard',
+      (tester) async {
+    await pumpWithDialog(tester);
 
+    // 内容框获得焦点 → 键盘客户端连上（相当于软键盘弹出）
+    await tester.tap(find.byType(TextField).first);
+    await tester.pump();
+    expect(tester.testTextInput.hasAnyClients, isTrue);
+
+    // 点击输入框外的空白区域（标题）→ 失焦，键盘收起
+    await tester.tap(find.text('Send feedback'));
+    await tester.pump();
+    expect(tester.testTextInput.hasAnyClients, isFalse);
+
+    // 邮箱框同样验证（先滚动到可见）
+    await tester.ensureVisible(find.byType(TextField).last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(TextField).last);
+    await tester.pump();
+    expect(tester.testTextInput.hasAnyClients, isTrue);
+
+    await tester.tap(find.text(
+        'Some issues take more than one sentence to explain — leave your email so we can follow up.'));
+    await tester.pump();
+    expect(tester.testTextInput.hasAnyClients, isFalse);
+  });
+
+  testWidgets('empty content focuses the field instead of submitting',
+      (tester) async {
+    final service = _RecordingService();
+    await pumpWithDialog(tester,
+        config: SimpleFeedbackConfig(service: service));
+
+    await tester.ensureVisible(find.text('Submit'));
     await tester.tap(find.text('Submit'));
     await tester.pump();
 
@@ -106,12 +143,15 @@ void main() {
     expect(find.text('Send feedback'), findsOneWidget, reason: '弹窗应停留在表单页');
   });
 
-  testWidgets('submits the selected type and content, then auto-closes', (tester) async {
+  testWidgets('submits the selected type and content, then auto-closes',
+      (tester) async {
     final service = _RecordingService();
-    await pumpWithDialog(tester, config: SimpleFeedbackConfig(service: service));
+    await pumpWithDialog(tester,
+        config: SimpleFeedbackConfig(service: service));
 
     await tester.tap(find.text('Bug'));
-    await tester.enterText(find.byType(TextField), '播放器在第二课卡住了');
+    await tester.enterText(find.byType(TextField).first, '播放器在第二课卡住了');
+    await tester.ensureVisible(find.text('Submit'));
     await tester.tap(find.text('Submit'));
     await tester.pump(); // submit setState
     await tester.pump(const Duration(milliseconds: 300)); // switcher transition
@@ -133,15 +173,132 @@ void main() {
         reason: '成功页 1.5 秒后应自动关闭');
   });
 
-  testWidgets('a failing service shows the localized error snack bar', (tester) async {
+  testWidgets('a failing service shows the localized error snack bar',
+      (tester) async {
     final service = _RecordingService(error: Exception('network down'));
-    await pumpWithDialog(tester, config: SimpleFeedbackConfig(service: service));
+    await pumpWithDialog(tester,
+        config: SimpleFeedbackConfig(service: service));
 
-    await tester.enterText(find.byType(TextField), 'hello');
+    await tester.enterText(find.byType(TextField).first, 'hello');
+    await tester.ensureVisible(find.text('Submit'));
     await tester.tap(find.text('Submit'));
     await tester.pump();
 
-    expect(find.text('Failed to submit, please try again later'), findsOneWidget);
+    expect(
+        find.text('Failed to submit, please try again later'), findsOneWidget);
     expect(find.text('Send feedback'), findsOneWidget, reason: '失败后应留在表单页');
+  });
+
+  testWidgets('passes the trimmed email through when filled', (tester) async {
+    final service = _RecordingService();
+    await pumpWithDialog(tester,
+        config: SimpleFeedbackConfig(service: service));
+
+    expect(find.text('Email (optional)'), findsOneWidget);
+    await tester.enterText(find.byType(TextField).first, '播放器在第二课卡住了');
+    await tester.enterText(find.byType(TextField).last, '  user@example.com  ');
+    await tester.ensureVisible(find.text('Submit'));
+    await tester.tap(find.text('Submit'));
+    await tester.pump(); // submit setState
+    await tester
+        .pump(const Duration(milliseconds: 1600)); // 1.5s auto-close delay
+    await tester.pumpAndSettle(); // dialog exit transition
+
+    expect(service.calls, hasLength(1));
+    expect(service.calls.single['email'], 'user@example.com');
+  });
+
+  testWidgets('passes a null email when left blank', (tester) async {
+    final service = _RecordingService();
+    await pumpWithDialog(tester,
+        config: SimpleFeedbackConfig(service: service));
+
+    await tester.enterText(find.byType(TextField).first, '建议增加倍速');
+    await tester.ensureVisible(find.text('Submit'));
+    await tester.tap(find.text('Submit'));
+    await tester.pump(); // submit setState
+    await tester
+        .pump(const Duration(milliseconds: 1600)); // 1.5s auto-close delay
+    await tester.pumpAndSettle(); // dialog exit transition
+
+    expect(service.calls, hasLength(1));
+    expect(service.calls.single['email'], isNull);
+  });
+
+  testWidgets('restores content, email and type after closing via the X button',
+      (tester) async {
+    final service = _RecordingService();
+    await pumpWithDialog(tester,
+        config: SimpleFeedbackConfig(service: service));
+
+    await tester.tap(find.text('Bug'));
+    await tester.enterText(find.byType(TextField).first, '播放器在第二课卡住了');
+    await tester.enterText(find.byType(TextField).last, 'user@example.com');
+    await tester.tap(find.byIcon(Icons.close), warnIfMissed: false);
+    await tester.pumpAndSettle(); // exit transition, dispose 停入草稿
+
+    await tester.tap(find.widgetWithText(ElevatedButton, 'open'), warnIfMissed: false); // 重新打开
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 350));
+
+    expect(
+      tester.widget<TextField>(find.byType(TextField).first).controller!.text,
+      '播放器在第二课卡住了',
+    );
+    expect(
+      tester.widget<TextField>(find.byType(TextField).last).controller!.text,
+      'user@example.com',
+    );
+
+    // 用提交记录验证类型也被恢复。
+    await tester.ensureVisible(find.text('Submit'));
+    await tester.tap(find.text('Submit'));
+    await tester.pump(); // submit setState
+    await tester.pump(const Duration(milliseconds: 1600));
+    await tester.pumpAndSettle();
+
+    expect(service.calls, hasLength(1));
+    expect(service.calls.single['type'], FeedbackType.bug);
+    expect(service.calls.single['content'], '播放器在第二课卡住了');
+    expect(service.calls.single['email'], 'user@example.com');
+  });
+
+  testWidgets('clears the draft after a successful submit', (tester) async {
+    final service = _RecordingService();
+    await pumpWithDialog(tester,
+        config: SimpleFeedbackConfig(service: service));
+
+    await tester.enterText(find.byType(TextField).first, '建议增加倍速');
+    await tester.ensureVisible(find.text('Submit'));
+    await tester.tap(find.text('Submit'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 1600));
+    await tester.pumpAndSettle(); // 成功页 1.5s 后自动关闭并清空草稿
+
+    await tester.tap(find.widgetWithText(ElevatedButton, 'open'), warnIfMissed: false); // 重新打开
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 350));
+
+    expect(
+      tester.widget<TextField>(find.byType(TextField).first).controller!.text,
+      '',
+      reason: '提交成功后重开应为空白表单',
+    );
+  });
+
+  testWidgets('closing with nothing entered parks no draft', (tester) async {
+    await pumpWithDialog(tester);
+
+    await tester.tap(find.byIcon(Icons.close), warnIfMissed: false);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.widgetWithText(ElevatedButton, 'open'), warnIfMissed: false);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 350));
+
+    expect(
+      tester.widget<TextField>(find.byType(TextField).first).controller!.text,
+      '',
+    );
   });
 }

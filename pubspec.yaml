@@ -1,8 +1,9 @@
 name: simple_feedback
 description: >-
-  An in-app feedback dialog for Flutter backed by Firebase (Firestore +
-  Firebase Storage). Feedback type selection, screenshot attachments with
-  automatic page capture, anonymous device id, and built-in zh/en/ja strings.
+  An in-app feedback dialog for Flutter backed by Firebase. Feedback type
+  selection, screenshot attachments (embedded into Firestore documents by
+  default, or uploaded to Firebase Storage), automatic page capture,
+  anonymous device id, and built-in zh/en/ja strings.
 version: 0.1.0
 topics:
   - feedback
@@ -19,6 +20,7 @@ dependencies:
   cloud_firestore: ^6.10.0
   firebase_core: ^4.15.0
   firebase_storage: ^13.6.0
+  image: ^4.10.1
   image_picker: ^1.2.3
   shared_preferences: ^2.5.5
 

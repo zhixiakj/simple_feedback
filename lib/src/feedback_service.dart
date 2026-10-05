@@ -6,6 +6,8 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting;
 
+import 'feedback_image_pipeline.dart';
+import 'feedback_image_storage.dart';
 import 'feedback_type.dart';
 
 /// Thrown when any screenshot upload fails; the whole submission is aborted
@@ -61,36 +63,57 @@ class FeedbackService {
 
   /// Submits one feedback entry.
   ///
-  /// Screenshots are uploaded first; if any upload fails nothing is written
-  /// to Firestore and [FeedbackUploadException] is thrown.
+  /// Images always go through [FeedbackImagePipeline] first (resize +
+  /// JPEG re-encode to fit the byte budget). In
+  /// [FeedbackImageStorage.firestore] mode they are then embedded into the
+  /// document as `Blob`s; in storage mode they are uploaded first and the
+  /// document stores their paths. Any pipeline/upload failure aborts the
+  /// submission with [FeedbackUploadException].
   Future<void> submit({
     required FeedbackType type,
     required String content,
     required String source,
     required String deviceId,
+    String? email,
     String? sourceData,
     Map<String, dynamic>? metadata,
     List<Uint8List> images = const [],
+    FeedbackImageStorage imageStorage = FeedbackImageStorage.firestore,
     String collection = 'feedback',
     String storagePrefix = 'feedback',
   }) async {
-    List<String>? imagePaths;
+    List<Uint8List>? normalized;
     if (images.isNotEmpty) {
-      final List<String?> results;
-      if (_imageUploader != null) {
-        results = await _imageUploader(images, deviceId, storagePrefix);
-      } else {
-        results = await _uploadToFirebaseStorage(
-          _bucket, images, deviceId, storagePrefix,
-        );
-      }
-      if (results.any((path) => path == null)) {
+      try {
+        normalized = FeedbackImagePipeline.processAll(images);
+      } on FeedbackImageTooLargeException {
         throw const FeedbackUploadException();
       }
-      imagePaths = results.cast<String>();
+    }
+
+    List<Blob>? imageBlobs;
+    List<String>? imagePaths;
+    if (normalized != null && normalized.isNotEmpty) {
+      if (imageStorage == FeedbackImageStorage.firestore) {
+        imageBlobs = [for (final bytes in normalized) Blob(bytes)];
+      } else {
+        final List<String?> results;
+        if (_imageUploader != null) {
+          results = await _imageUploader(normalized, deviceId, storagePrefix);
+        } else {
+          results = await _uploadToFirebaseStorage(
+            _bucket, normalized, deviceId, storagePrefix,
+          );
+        }
+        if (results.any((path) => path == null)) {
+          throw const FeedbackUploadException();
+        }
+        imagePaths = results.cast<String>();
+      }
     }
 
     final trimmedContext = sourceData?.trim();
+    final trimmedEmail = email?.trim();
     final data = <String, dynamic>{
       'type': type.value,
       'content': content,
@@ -98,8 +121,11 @@ class FeedbackService {
       'deviceId': deviceId,
       'platform': _platformName(),
       'createdAt': FieldValue.serverTimestamp(),
+      if (trimmedEmail != null && trimmedEmail.isNotEmpty)
+        'email': trimmedEmail,
       if (trimmedContext != null && trimmedContext.isNotEmpty)
         'sourceData': trimmedContext,
+      if (imageBlobs != null && imageBlobs.isNotEmpty) 'imgs': imageBlobs,
       if (imagePaths != null && imagePaths.isNotEmpty) 'imgs': imagePaths,
       ...?metadata,
     };

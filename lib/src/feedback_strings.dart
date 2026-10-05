@@ -5,6 +5,12 @@ import 'dart:ui' show Locale;
 /// Built-in translations for Chinese, English and Japanese are provided via
 /// [FeedbackStrings.builtin]. Pass an instance to
 /// [SimpleFeedbackConfig.strings] to override them (or to add languages).
+///
+/// Resolution order (evaluated on every dialog open): a config-provided
+/// override wins; otherwise the ambient locale (`Localizations.localeOf`,
+/// falling back to the device locale) picks a built-in translation; any
+/// language without a built-in translation falls back to English. See the
+/// package README for the full default-strings table.
 class FeedbackStrings {
   const FeedbackStrings({
     required this.title,
@@ -15,6 +21,8 @@ class FeedbackStrings {
     required this.typeOther,
     required this.contentLabel,
     required this.contentHint,
+    required this.emailLabel,
+    required this.emailHint,
     required this.sourceDataTitle,
     required this.readOnly,
     required this.screenshotsLabel,
@@ -57,6 +65,10 @@ class FeedbackStrings {
   // ── Content input ──
   final String contentLabel;
   final String contentHint;
+
+  // ── Email (optional contact) ──
+  final String emailLabel;
+  final String emailHint;
 
   // ── Read-only attached context block ──
   final String sourceDataTitle;
@@ -123,6 +135,8 @@ class FeedbackStrings {
     typeOther: '其他',
     contentLabel: '详细描述',
     contentHint: '请描述你遇到的问题或建议...',
+    emailLabel: '邮箱（选填）',
+    emailHint: '有些问题一句话说不清，留下邮箱方便我们和你继续沟通',
     sourceDataTitle: '附带的信息',
     readOnly: '只读',
     screenshotsLabel: '截图',
@@ -134,7 +148,7 @@ class FeedbackStrings {
     successTitle: '感谢你的反馈！',
     successSubtitle: '我们会认真阅读每一条反馈',
     errorSubmit: '提交失败，请稍后重试',
-    errorUpload: '图片上传失败，请稍后重试',
+    errorUpload: '图片处理失败，请换一张或减少张数试试',
     errorCapture: '截图失败，请重试',
     errorPick: '选择图片失败',
   );
@@ -148,6 +162,9 @@ class FeedbackStrings {
     typeOther: 'Other',
     contentLabel: 'Description',
     contentHint: 'Describe the problem or your suggestion...',
+    emailLabel: 'Email (optional)',
+    emailHint:
+        'Some issues take more than one sentence to explain — leave your email so we can follow up.',
     sourceDataTitle: 'Attached context',
     readOnly: 'read-only',
     screenshotsLabel: 'Screenshots',
@@ -159,7 +176,7 @@ class FeedbackStrings {
     successTitle: 'Thanks for your feedback!',
     successSubtitle: 'We read every piece of feedback carefully',
     errorSubmit: 'Failed to submit, please try again later',
-    errorUpload: 'Failed to upload images, please try again later',
+    errorUpload: 'Failed to process images — try another one or fewer',
     errorCapture: 'Capture failed, please try again',
     errorPick: 'Failed to pick image',
   );
@@ -173,6 +190,8 @@ class FeedbackStrings {
     typeOther: 'その他',
     contentLabel: '詳細',
     contentHint: '問題やご提案をご記入ください...',
+    emailLabel: 'メールアドレス（任意）',
+    emailHint: '一言では伝えきれない場合にご連絡できるよう、メールアドレスを残していただけると幸いです',
     sourceDataTitle: '添付情報',
     readOnly: '読み取り専用',
     screenshotsLabel: 'スクリーンショット',
@@ -184,7 +203,7 @@ class FeedbackStrings {
     successTitle: 'フィードバックありがとうございます！',
     successSubtitle: 'ひとつひとつ丁寧に読ませていただきます',
     errorSubmit: '送信に失敗しました。しばらくしてからもう一度お試しください',
-    errorUpload: '画像のアップロードに失敗しました。しばらくしてからもう一度お試しください',
+    errorUpload: '画像の処理に失敗しました。別の画像か少なめの枚数でお試しください',
     errorCapture: 'キャプチャに失敗しました。もう一度お試しください',
     errorPick: '画像の選択に失敗しました',
   );

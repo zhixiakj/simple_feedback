@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
@@ -7,6 +8,7 @@ import 'package:image_picker/image_picker.dart';
 
 import 'feedback_config.dart';
 import 'feedback_device_id.dart';
+import 'feedback_draft.dart';
 import 'feedback_service.dart';
 import 'feedback_strings.dart';
 import 'feedback_type.dart';
@@ -81,17 +83,23 @@ Future<Uint8List?> captureBoundary(GlobalKey key, BuildContext context) async {
 /// [FeedbackColors] overrides applied.
 class _Palette {
   _Palette.of(BuildContext context, FeedbackColors? overrides)
-      : surface = overrides?.surface ?? Theme.of(context).colorScheme.surfaceContainerHigh,
-        surfaceLow = overrides?.surfaceLow ?? Theme.of(context).colorScheme.surfaceContainerLow,
-        onSurface = overrides?.onSurface ?? Theme.of(context).colorScheme.onSurface,
-        onSurfaceVariant =
-            overrides?.onSurfaceVariant ?? Theme.of(context).colorScheme.onSurfaceVariant,
+      : surface = overrides?.surface ??
+            Theme.of(context).colorScheme.surfaceContainerHigh,
+        surfaceLow = overrides?.surfaceLow ??
+            Theme.of(context).colorScheme.surfaceContainerLow,
+        onSurface =
+            overrides?.onSurface ?? Theme.of(context).colorScheme.onSurface,
+        onSurfaceVariant = overrides?.onSurfaceVariant ??
+            Theme.of(context).colorScheme.onSurfaceVariant,
         primary = overrides?.primary ?? Theme.of(context).colorScheme.primary,
-        primaryContainer =
-            overrides?.primaryContainer ?? Theme.of(context).colorScheme.primaryContainer,
-        onPrimary = overrides?.onPrimary ?? Theme.of(context).colorScheme.onPrimary,
-        outlineVariant = overrides?.outlineVariant ?? Theme.of(context).colorScheme.outlineVariant,
-        error = overrides?.error ?? Theme.of(context).colorScheme.errorContainer;
+        primaryContainer = overrides?.primaryContainer ??
+            Theme.of(context).colorScheme.primaryContainer,
+        onPrimary =
+            overrides?.onPrimary ?? Theme.of(context).colorScheme.onPrimary,
+        outlineVariant = overrides?.outlineVariant ??
+            Theme.of(context).colorScheme.outlineVariant,
+        error =
+            overrides?.error ?? Theme.of(context).colorScheme.errorContainer;
 
   final Color surface;
   final Color surfaceLow;
@@ -104,7 +112,8 @@ class _Palette {
   final Color error;
 }
 
-FeedbackStrings _resolveStrings(BuildContext context, SimpleFeedbackConfig config) {
+FeedbackStrings _resolveStrings(
+    BuildContext context, SimpleFeedbackConfig config) {
   final override = config.strings;
   if (override != null) return override;
   final locale = Localizations.maybeLocaleOf(context) ??
@@ -148,6 +157,8 @@ class _FeedbackModalState extends State<_FeedbackModal>
     with SingleTickerProviderStateMixin {
   final _controller = TextEditingController();
   final _focusNode = FocusNode();
+  final _emailController = TextEditingController();
+  final _emailFocusNode = FocusNode();
   FeedbackType _selectedType = FeedbackType.suggestion;
   bool _isSubmitting = false;
   bool _isSubmitted = false;
@@ -159,13 +170,33 @@ class _FeedbackModalState extends State<_FeedbackModal>
   /// on submit.
   final List<Uint8List> _images = [];
 
+  /// Length of the auto-seeded page-screenshot prefix in [_images]. The
+  /// prefix is re-captured on every open, so only images after it are parked
+  /// into the draft.
+  int _autoScreenshotCount = 0;
+
   late final AnimationController _animController;
   late final Animation<double> _scaleAnim;
 
   @override
   void initState() {
     super.initState();
-    _images.addAll(widget.initialScreenshots);
+    // 上次未提交的草稿：文字/邮箱/类型直接恢复，图片接在本次新截的页面
+    // 截图之后，超出上限时裁掉尾部草稿图。
+    final draft = FeedbackDraftStore.peek();
+    _controller.text = draft?.content ?? '';
+    _emailController.text = draft?.email ?? '';
+    if (draft != null) _selectedType = draft.type;
+    _images
+      ..addAll(widget.initialScreenshots)
+      ..addAll(draft?.images ?? const []);
+    if (_images.length > widget.config.maxImages) {
+      _images.removeRange(widget.config.maxImages, _images.length);
+    }
+    _autoScreenshotCount = widget.initialScreenshots.length;
+    if (_images.length < _autoScreenshotCount) {
+      _autoScreenshotCount = _images.length;
+    }
     _animController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 300),
@@ -179,8 +210,21 @@ class _FeedbackModalState extends State<_FeedbackModal>
 
   @override
   void dispose() {
+    // 成功提交后草稿作废；否则把已填内容停回草稿，下次打开恢复。
+    if (_isSubmitted) {
+      FeedbackDraftStore.clear();
+    } else {
+      unawaited(FeedbackDraftStore.save(
+        content: _controller.text,
+        email: _emailController.text,
+        type: _selectedType,
+        images: _images.skip(_autoScreenshotCount).toList(),
+      ));
+    }
     _controller.dispose();
     _focusNode.dispose();
+    _emailController.dispose();
+    _emailFocusNode.dispose();
     _animController.dispose();
     super.dispose();
   }
@@ -191,6 +235,7 @@ class _FeedbackModalState extends State<_FeedbackModal>
       _focusNode.requestFocus();
       return;
     }
+    final email = _emailController.text.trim();
 
     setState(() => _isSubmitting = true);
 
@@ -204,8 +249,10 @@ class _FeedbackModalState extends State<_FeedbackModal>
         source: widget.source,
         deviceId: deviceId,
         sourceData: widget.sourceData,
+        email: email.isEmpty ? null : email,
         metadata: widget.metadata,
         images: _images,
+        imageStorage: widget.config.imageStorage,
         collection: widget.config.collection,
         storagePrefix: widget.config.storagePrefix,
       );
@@ -288,8 +335,8 @@ class _FeedbackModalState extends State<_FeedbackModal>
                   },
                 ),
               ListTile(
-                leading:
-                    Icon(Icons.photo_outlined, color: palette.onSurface, size: 22),
+                leading: Icon(Icons.photo_outlined,
+                    color: palette.onSurface, size: 22),
                 title: Text(strings.pickFromGallery,
                     style: Theme.of(context)
                         .textTheme
@@ -326,6 +373,9 @@ class _FeedbackModalState extends State<_FeedbackModal>
       final photo = await picker.pickImage(
         source: ImageSource.gallery,
         imageQuality: 70,
+        // 平台侧先缩到 1440 内，Dart 侧解码/压缩才够快（管线仍会再压）。
+        maxWidth: 1440,
+        maxHeight: 1440,
       );
       if (photo == null) return;
       final bytes = await photo.readAsBytes();
@@ -339,16 +389,19 @@ class _FeedbackModalState extends State<_FeedbackModal>
 
   void _addImage(Uint8List bytes) {
     if (_images.length >= widget.config.maxImages) {
-      _showErrorSnack(
-          _resolveStrings(context, widget.config)
-              .errorTooManyImages(widget.config.maxImages));
+      _showErrorSnack(_resolveStrings(context, widget.config)
+          .errorTooManyImages(widget.config.maxImages));
       return;
     }
     setState(() => _images.add(bytes));
   }
 
   void _removeImageAt(int index) {
-    setState(() => _images.removeAt(index));
+    setState(() {
+      _images.removeAt(index);
+      // 移除的是自动截图时，前缀相应缩短，其后的用户图片全部计入草稿。
+      if (index < _autoScreenshotCount) _autoScreenshotCount--;
+    });
   }
 
   // ── Source data (read-only collapse) ──────────────────────────────────
@@ -359,7 +412,8 @@ class _FeedbackModalState extends State<_FeedbackModal>
       decoration: BoxDecoration(
         color: palette.surfaceLow,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: palette.outlineVariant.withValues(alpha: 0.3)),
+        border:
+            Border.all(color: palette.outlineVariant.withValues(alpha: 0.3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -390,7 +444,8 @@ class _FeedbackModalState extends State<_FeedbackModal>
                   Text(
                     strings.readOnly,
                     style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: palette.onSurfaceVariant.withValues(alpha: 0.5),
+                          color:
+                              palette.onSurfaceVariant.withValues(alpha: 0.5),
                         ),
                   ),
                   const Spacer(),
@@ -735,6 +790,8 @@ class _FeedbackModalState extends State<_FeedbackModal>
               child: TextField(
                 controller: _controller,
                 focusNode: _focusNode,
+                // 移动端默认 tap-outside 不收键盘，这里显式失焦
+                onTapOutside: (_) => _focusNode.unfocus(),
                 maxLines: 5,
                 minLines: 4,
                 maxLength: widget.config.maxContentLength,
@@ -785,6 +842,51 @@ class _FeedbackModalState extends State<_FeedbackModal>
                   ),
                 ),
               ],
+            ),
+            const SizedBox(height: 12),
+
+            // ── Email (optional) ──
+            Text(
+              strings.emailLabel,
+              style: textTheme.labelMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0.5,
+                color: palette.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              strings.emailHint,
+              style: textTheme.labelSmall?.copyWith(
+                height: 1.4,
+                color: palette.onSurfaceVariant.withValues(alpha: 0.6),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Container(
+              decoration: BoxDecoration(
+                color: palette.surfaceLow,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                    color: palette.outlineVariant.withValues(alpha: 0.3)),
+              ),
+              child: TextField(
+                controller: _emailController,
+                focusNode: _emailFocusNode,
+                onTapOutside: (_) => _emailFocusNode.unfocus(),
+                keyboardType: TextInputType.emailAddress,
+                autocorrect: false,
+                style: textTheme.bodyLarge?.copyWith(
+                  color: palette.onSurface,
+                  height: 1.5,
+                ),
+                decoration: const InputDecoration(
+                  border: InputBorder.none,
+                  filled: false,
+                  contentPadding:
+                      EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                ),
+              ),
             ),
             const SizedBox(height: 20),
 

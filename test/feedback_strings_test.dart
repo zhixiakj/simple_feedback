@@ -10,17 +10,21 @@ void main() {
       expect(s.title, '意见反馈');
       expect(s.typeBug, '问题反馈');
       expect(s.successTitle, '感谢你的反馈！');
+      expect(s.emailLabel, '邮箱（选填）');
+      expect(s.emailHint, '有些问题一句话说不清，留下邮箱方便我们和你继续沟通');
     });
 
     test('resolves ja', () {
       final s = FeedbackStrings.builtin(const Locale('ja'));
       expect(s.title, 'フィードバック');
       expect(s.typeBug, '不具合');
+      expect(s.emailLabel, 'メールアドレス（任意）');
     });
 
     test('falls back to en for unknown languages', () {
       final s = FeedbackStrings.builtin(const Locale('ko'));
       expect(s.title, 'Send feedback');
+      expect(s.emailLabel, 'Email (optional)');
       expect(identical(s, FeedbackStrings.builtin(const Locale('en'))), true);
     });
   });

@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import 'package:cloud_firestore/cloud_firestore.dart' show Blob;
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:simple_feedback/simple_feedback.dart';
@@ -35,6 +36,8 @@ void main() {
         reason: '无图反馈不应写 imgs 字段');
     expect(data.containsKey('sourceData'), isFalse,
         reason: '无上下文不应写 sourceData 字段');
+    expect(data.containsKey('email'), isFalse,
+        reason: '未填邮箱不应写 email 字段');
   });
 
   test('merges metadata as-is into the document', () async {
@@ -72,8 +75,30 @@ void main() {
     expect(docs[1].data().containsKey('sourceData'), isFalse);
   });
 
+  test('trims and stores email; blank email is omitted', () async {
+    await serviceWith().submit(
+      type: FeedbackType.other,
+      content: 'x',
+      source: 'p',
+      deviceId: 'd',
+      email: '  user@example.com  ',
+    );
+    await serviceWith().submit(
+      type: FeedbackType.other,
+      content: 'y',
+      source: 'p',
+      deviceId: 'd',
+      email: '   ',
+    );
+
+    final docs = (await db.collection('feedback').get()).docs;
+    expect(docs[0].data()['email'], 'user@example.com');
+    expect(docs[1].data().containsKey('email'), isFalse);
+  });
+
   test('uploads images first and stores their storage paths', () async {
-    final png = Uint8List.fromList([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 1, 2, 3]);
+    final png = Uint8List.fromList(
+        [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 1, 2, 3]);
     var uploaded = <Uint8List>[];
     final service = serviceWith(
       uploader: (images, deviceId, storagePrefix) async {
@@ -90,6 +115,7 @@ void main() {
       source: 'RuleDetailPage',
       deviceId: 'dev-9',
       images: [png, png],
+      imageStorage: FeedbackImageStorage.storage,
       storagePrefix: 'fb',
     );
 
@@ -111,12 +137,41 @@ void main() {
         source: 's',
         deviceId: 'd',
         images: [Uint8List.fromList([1]), Uint8List.fromList([2])],
+        imageStorage: FeedbackImageStorage.storage,
       ),
       throwsA(isA<FeedbackUploadException>()),
     );
 
     expect((await db.collection('feedback').get()).docs, isEmpty,
         reason: '上传失败时不应写入 Firestore');
+  });
+
+  test('firestore 模式（默认）：图片以 Blob 嵌入文档、不经 uploader', () async {
+    final png = Uint8List.fromList(
+        [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 1, 2, 3]);
+    var uploaderCalled = false;
+    final service = serviceWith(
+      uploader: (images, deviceId, storagePrefix) async {
+        uploaderCalled = true;
+        return const [];
+      },
+    );
+
+    await service.submit(
+      type: FeedbackType.bug,
+      content: '截图见附件',
+      source: 'RuleDetailPage',
+      deviceId: 'dev-9',
+      images: [png, png],
+    );
+
+    expect(uploaderCalled, isFalse, reason: '默认 firestore 模式不应触碰 Storage');
+    final data = (await db.collection('feedback').get()).docs.first.data();
+    final imgs = data['imgs'] as List<dynamic>;
+    expect(imgs, hasLength(2));
+    expect(imgs.first, isA<Blob>());
+    // 不可解码的测试字节按"尽力而为"原样透传
+    expect((imgs.first as Blob).bytes, png);
   });
 
   test('respects the configured collection name', () async {

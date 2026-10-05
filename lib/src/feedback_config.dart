@@ -1,6 +1,7 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 
+import 'feedback_image_storage.dart';
 import 'feedback_service.dart';
 import 'feedback_strings.dart';
 
@@ -59,6 +60,7 @@ class FeedbackColors {
 class SimpleFeedbackConfig {
   const SimpleFeedbackConfig({
     this.firebaseApp,
+    this.imageStorage = FeedbackImageStorage.firestore,
     this.collection = 'feedback',
     this.storagePrefix = 'feedback',
     this.maxImages = 4,
@@ -89,6 +91,13 @@ class SimpleFeedbackConfig {
   /// ```
   final FirebaseApp? firebaseApp;
 
+  /// How screenshot attachments are stored. Defaults to
+  /// [FeedbackImageStorage.firestore] (embedded into the document — no
+  /// Storage bucket, works on the free Spark plan). Use
+  /// [FeedbackImageStorage.storage] when your project is on Blaze and you
+  /// prefer bucket uploads.
+  final FeedbackImageStorage imageStorage;
+
   /// Firestore collection the feedback documents are written to.
   final String collection;
 
@@ -106,7 +115,11 @@ class SimpleFeedbackConfig {
   final FeedbackColors? colors;
 
   /// String overrides; `null` auto-resolves built-in strings from the
-  /// ambient locale (zh/en/ja, falling back to English).
+  /// ambient locale (zh/en/ja, falling back to English). Set here for a
+  /// session-wide custom language; for custom strings that must follow
+  /// runtime language switches, pass a per-call
+  /// `showSimpleFeedback(config: ...)` instead — the global config's
+  /// strings are fixed at startup.
   final FeedbackStrings? strings;
 
   /// Service override (mainly for tests, or full manual wiring of the
