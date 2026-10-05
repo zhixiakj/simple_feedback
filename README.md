@@ -43,7 +43,7 @@ the console.
 
    ```yaml
    dependencies:
-     simple_feedback: ^0.1.0
+     simple_feedback: ^1.0.0
    ```
 
 2. Set up Firebase for your app if you haven't already
