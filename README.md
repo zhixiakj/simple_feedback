@@ -5,8 +5,11 @@ required, no Storage bucket required (works on the free Spark plan).
 
 Users pick a feedback type (bug / suggestion / other), describe the issue,
 attach screenshots — including an automatic capture of the page they are on —
-and submit. Everything lands in your Firebase project, where you read it from
-the console.
+and submit. Everything lands in your Firebase project — view it directly in
+the Firebase console, or through the companion
+[simple_feedback_admin](https://github.com/zhixiakj/simple_feedback_admin)
+web app, where you can see the attached screenshots and operate on the
+feedback right in the browser.
 
 ## Features
 
@@ -264,9 +267,34 @@ In the default firestore mode the images are `Blob`s in the document — the
 console shows them as base64 text. Open
 [tool/blob_to_image.html](tool/blob_to_image.html) locally, paste the base64,
 and the picture renders (with size/format info and a download button). In
-storage mode just use the Storage console's built-in image preview.
+storage mode just use the Storage console's built-in image preview. The
+[admin console](#admin-console) below previews attached screenshots in both
+modes — no base64 pasting needed.
 
 A full runnable demo lives in [example/](example/).
+
+## Admin console
+
+There are two ways to read the submissions:
+
+1. Directly in the **Firebase console** — no extra setup, but screenshots
+   show up as base64 text, and acting on an entry means editing the raw
+   document by hand.
+2. Through
+   [simple_feedback_admin](https://github.com/zhixiakj/simple_feedback_admin),
+   the companion web app (Next.js) — the advantage: you can see the
+   screenshots and operate on the feedback right in the browser:
+
+   - list and keyword-search submissions, filter by type / platform / status
+   - preview attached screenshots with click-to-zoom (both the default
+     firestore-Blob mode and `storage` mode)
+   - triage: mark feedback resolved / reopen it, delete spam
+   - dashboard stats (total, today's new, pending, per type)
+   - bilingual zh / en UI, password login, deployable to Vercel
+
+The web app talks to Firestore through the Admin SDK with a service-account
+key, so the client-side write-only rules from [Setup](#setup) stay exactly
+as they are. See that project's README for setup and deployment details.
 
 ## Localization / 多语言
 
@@ -361,7 +389,8 @@ resolution re-runs on every dialog open and follows live locale switches.
 ## Limitations
 
 - Submit-only by design: there is no in-app "my feedback" thread yet. Read
-  submissions in the Firebase console.
+  submissions in the Firebase console, or in the
+  [admin web app](https://github.com/zhixiakj/simple_feedback_admin).
 - Screenshots are capped at ~900 KB per submission (Firestore document
   limit); more or heavier images fail with a localized error.
 - The `allow create: if true` rules accept submissions from anyone; watch the
