@@ -1,6 +1,6 @@
 name: simple_feedback
 description: An in-app feedback dialog for Flutter backed by Firebase - type selection, screenshot attachments, automatic page capture, device/user id, and built-in zh/en/ja strings.
-version: 1.1.0
+version: 1.1.1
 repository: https://github.com/zhixiakj/simple_feedback
 issue_tracker: https://github.com/zhixiakj/simple_feedback/issues
 topics:

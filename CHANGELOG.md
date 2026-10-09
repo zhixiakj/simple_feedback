@@ -1,3 +1,10 @@
+## 1.1.1
+
+* Fixed the "Buy me a coffee" QR images in the README not rendering on
+  pub.dev: relative image paths are pruned there, so the images now use
+  absolute URLs (pre-resized to 300 px wide, since pub.dev strips the
+  `width` attribute).
+
 ## 1.1.0
 
 * Optional developer-supplied `userId`: pass it per call

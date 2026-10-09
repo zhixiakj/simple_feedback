@@ -373,7 +373,7 @@ If this package saves you time, consider buying me a coffee ☕
 (WeChat Pay on the left, Alipay on the right):
 
 <p>
-  <img src="./weixin.png" width="300" alt="WeChat Pay" />
+  <img src="https://raw.githubusercontent.com/zhixiakj/simple_feedback/main/weixin.png" width="300" alt="WeChat Pay" />
   &nbsp;&nbsp;
-  <img src="./zfb.png" width="300" alt="Alipay" />
+  <img src="https://raw.githubusercontent.com/zhixiakj/simple_feedback/main/zfb.png" width="300" alt="Alipay" />
 </p>
