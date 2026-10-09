@@ -104,6 +104,8 @@ the console.
      storagePrefix: 'feedback',         // default
      maxImages: 4,                      // default
      maxContentLength: 500,             // default
+     // userId: 'u-123',                // optional; recorded on every submission
+     emailVisibility: FeedbackEmailVisibility.hideWithUserId, // default
      colors: FeedbackColors(primary: Color(0xFFFF8B45)),
    ));
    ```
@@ -364,3 +366,14 @@ resolution re-runs on every dialog open and follows live locale switches.
   limit); more or heavier images fail with a localized error.
 - The `allow create: if true` rules accept submissions from anyone; watch the
   Firestore usage dashboard, or tighten with App Check when needed.
+
+## Buy me a coffee
+
+If this package saves you time, consider buying me a coffee ☕
+(WeChat Pay on the left, Alipay on the right):
+
+<p>
+  <img src="./weixin.png" width="300" alt="WeChat Pay" />
+  &nbsp;&nbsp;
+  <img src="./zfb.png" width="300" alt="Alipay" />
+</p>
