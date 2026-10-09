@@ -52,8 +52,9 @@ service cloud.firestore {
    pod，时间长一点）。
 2. 设置页 → 反馈问题：弹窗应正常弹出；填内容、加截图提交。
 3. Firestore 控制台 → feedback 集合应出现一条记录（含 type/content/source/
-   deviceId/platform/appVersion/createdAt；用户在弹窗里选填了邮箱的话还会有
-   `email` 字段；截图在 `imgs` 字段里，是 blob 数据）。
+   deviceId/platform/appVersion/createdAt；开发者传入了 userId 的话还会有
+   `userId` 字段；用户在弹窗里选填了邮箱的话还会有 `email` 字段——传了
+   userId 时邮箱框默认自动隐藏；截图在 `imgs` 字段里，是 blob 数据）。
 4. **看截图**：控制台里点开 `imgs` 数组里的 blob 值 → 复制 base64 → 打开包里
    的 `tool/blob_to_image.html` 粘贴即可预览/下载。
 5. 日文界面语言下打开弹窗，文案应为日文。

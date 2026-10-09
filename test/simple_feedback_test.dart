@@ -19,6 +19,7 @@ class _RecordingService extends FeedbackService {
     required String content,
     required String source,
     required String deviceId,
+    String? userId,
     String? email,
     String? sourceData,
     Map<String, dynamic>? metadata,
@@ -33,11 +34,14 @@ class _RecordingService extends FeedbackService {
       'content': content,
       'source': source,
       'deviceId': deviceId,
+      'userId': userId,
       'email': email,
       'sourceData': sourceData,
       'metadata': metadata,
       'images': images,
       'imageStorage': imageStorage,
+      'collection': collection,
+      'storagePrefix': storagePrefix,
     });
   }
 }
@@ -47,10 +51,13 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     FeedbackDeviceId.resetForTests();
     FeedbackDraftStore.resetForTest();
+    // 复位全局配置：部分用例会 SimpleFeedback.configure(...) 注入全局项。
+    SimpleFeedback.configure(const SimpleFeedbackConfig());
   });
 
   Future<void> pumpWithDialog(
     WidgetTester tester, {
+    String? userId,
     SimpleFeedbackConfig? config,
   }) async {
     // 手机比例视口：默认 800x600 太矮，弹窗内容折叠导致提交按钮 tap 落空。
@@ -67,6 +74,7 @@ void main() {
               onPressed: () => showSimpleFeedback(
                 context,
                 source: 'TestPage',
+                userId: userId,
                 config: config,
               ),
               child: const Text('open'),
@@ -225,6 +233,204 @@ void main() {
     expect(service.calls.single['email'], isNull);
   });
 
+  testWidgets('hides the email input and records the userId when one is passed',
+      (tester) async {
+    final service = _RecordingService();
+    await pumpWithDialog(tester,
+        userId: 'u-1', config: SimpleFeedbackConfig(service: service));
+
+    expect(find.text('Email (optional)'), findsNothing,
+        reason: '默认 hideWithUserId：已知用户无需再留邮箱');
+    await tester.enterText(find.byType(TextField).first, '播放器在第二课卡住了');
+    await tester.ensureVisible(find.text('Submit'));
+    await tester.tap(find.text('Submit'));
+    await tester.pump(); // submit setState
+    await tester
+        .pump(const Duration(milliseconds: 1600)); // 1.5s auto-close delay
+    await tester.pumpAndSettle(); // dialog exit transition
+
+    expect(service.calls, hasLength(1));
+    expect(service.calls.single['userId'], 'u-1');
+    expect(service.calls.single['email'], isNull);
+  });
+
+  testWidgets('emailVisibility always keeps the email input beside a userId',
+      (tester) async {
+    final service = _RecordingService();
+    await pumpWithDialog(
+      tester,
+      userId: 'u-1',
+      config: SimpleFeedbackConfig(
+        service: service,
+        emailVisibility: FeedbackEmailVisibility.always,
+      ),
+    );
+
+    expect(find.text('Email (optional)'), findsOneWidget);
+    await tester.enterText(find.byType(TextField).first, '建议增加倍速');
+    await tester.enterText(find.byType(TextField).last, 'user@example.com');
+    await tester.ensureVisible(find.text('Submit'));
+    await tester.tap(find.text('Submit'));
+    await tester.pump(); // submit setState
+    await tester
+        .pump(const Duration(milliseconds: 1600)); // 1.5s auto-close delay
+    await tester.pumpAndSettle(); // dialog exit transition
+
+    expect(service.calls, hasLength(1));
+    expect(service.calls.single['userId'], 'u-1');
+    expect(service.calls.single['email'], 'user@example.com');
+  });
+
+  testWidgets('emailVisibility never hides the input even without a userId',
+      (tester) async {
+    await pumpWithDialog(
+      tester,
+      config: const SimpleFeedbackConfig(
+        emailVisibility: FeedbackEmailVisibility.never,
+      ),
+    );
+
+    expect(find.text('Email (optional)'), findsNothing);
+    expect(find.byType(TextField), findsOneWidget, reason: '只剩内容输入框');
+  });
+
+  testWidgets('falls back to the config userId; a per-call value overrides it',
+      (tester) async {
+    final service = _RecordingService();
+
+    Future<void> submitOnce({String? userId}) async {
+      await pumpWithDialog(
+        tester,
+        userId: userId,
+        config: SimpleFeedbackConfig(service: service, userId: 'cfg-u'),
+      );
+      await tester.enterText(find.byType(TextField).first, '建议增加倍速');
+      await tester.ensureVisible(find.text('Submit'));
+      await tester.tap(find.text('Submit'));
+      await tester.pump(); // submit setState
+      await tester
+          .pump(const Duration(milliseconds: 1600)); // 1.5s auto-close delay
+      await tester.pumpAndSettle(); // dialog exit transition
+    }
+
+    await submitOnce(); // 调用处未传 → 落到 config 的 userId
+    expect(service.calls.single['userId'], 'cfg-u');
+
+    await submitOnce(userId: 'call-u'); // 调用处传值 → 覆盖 config
+    expect(service.calls.last['userId'], 'call-u');
+  });
+
+  testWidgets(
+      'a per-call config merges with the global config (only set fields override)',
+      (tester) async {
+    final service = _RecordingService();
+    // 全局配置（模拟宿主 App 启动时 configure 的内容）
+    SimpleFeedback.configure(SimpleFeedbackConfig(service: service));
+
+    // 调用处只想覆盖 emailVisibility —— 全局的 service 等必须被继承
+    await pumpWithDialog(
+      tester,
+      userId: 'u-1',
+      config: const SimpleFeedbackConfig(
+        emailVisibility: FeedbackEmailVisibility.always,
+      ),
+    );
+
+    expect(find.text('Email (optional)'), findsOneWidget,
+        reason: 'per-call always 覆盖默认的 hideWithUserId');
+    await tester.enterText(find.byType(TextField).first, '建议增加倍速');
+    await tester.enterText(find.byType(TextField).last, 'user@example.com');
+    await tester.ensureVisible(find.text('Submit'));
+    await tester.tap(find.text('Submit'));
+    await tester.pump(); // submit setState
+    await tester.pump(const Duration(milliseconds: 1600)); // auto-close delay
+    await tester.pumpAndSettle(); // dialog exit transition
+
+    expect(service.calls, hasLength(1),
+        reason: '全局 service 应被继承，而不是回落到默认 FeedbackService');
+    expect(service.calls.single['userId'], 'u-1');
+    expect(service.calls.single['email'], 'user@example.com');
+  });
+
+  testWidgets('defaulted fields inherit from the global config', (tester) async {
+    final service = _RecordingService();
+    SimpleFeedback.configure(const SimpleFeedbackConfig(
+      collection: 'app_feedback',
+      storagePrefix: 'fb',
+    ));
+
+    // per-call 只带 service：collection / storagePrefix 应继承全局值
+    await pumpWithDialog(tester, config: SimpleFeedbackConfig(service: service));
+    await tester.enterText(find.byType(TextField).first, '建议增加倍速');
+    await tester.ensureVisible(find.text('Submit'));
+    await tester.tap(find.text('Submit'));
+    await tester.pump(); // submit setState
+    await tester.pump(const Duration(milliseconds: 1600)); // auto-close delay
+    await tester.pumpAndSettle(); // dialog exit transition
+
+    expect(service.calls.single['collection'], 'app_feedback');
+    expect(service.calls.single['storagePrefix'], 'fb');
+  });
+
+  testWidgets('an explicitly set per-call field beats the global config',
+      (tester) async {
+    final service = _RecordingService();
+    SimpleFeedback.configure(
+        const SimpleFeedbackConfig(collection: 'global_fb'));
+
+    await pumpWithDialog(
+      tester,
+      config: SimpleFeedbackConfig(service: service, collection: 'beta_fb'),
+    );
+    await tester.enterText(find.byType(TextField).first, '建议增加倍速');
+    await tester.ensureVisible(find.text('Submit'));
+    await tester.tap(find.text('Submit'));
+    await tester.pump(); // submit setState
+    await tester.pump(const Duration(milliseconds: 1600)); // auto-close delay
+    await tester.pumpAndSettle(); // dialog exit transition
+
+    expect(service.calls.single['collection'], 'beta_fb');
+  });
+
+  testWidgets('a hidden email input never submits the stale draft email',
+      (tester) async {
+    final service = _RecordingService();
+
+    // 匿名打开：填上邮箱后关闭，email 停入草稿。
+    await pumpWithDialog(tester,
+        config: SimpleFeedbackConfig(service: service));
+    await tester.enterText(find.byType(TextField).first, '建议增加倍速');
+    await tester.enterText(find.byType(TextField).last, 'user@example.com');
+    // 聚焦中的 email 框会持续把自己滚回可视区，先失焦再滚回顶部的关闭按钮。
+    FocusManager.instance.primaryFocus?.unfocus();
+    await tester.pump();
+    await tester.ensureVisible(find.byIcon(Icons.close));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byIcon(Icons.close), warnIfMissed: false);
+    await tester.pumpAndSettle(); // exit transition, dispose 停入草稿
+
+    // 以已知用户重开：email 框隐藏，但草稿恢复了文字与残留邮箱。
+    await pumpWithDialog(tester,
+        userId: 'u-1', config: SimpleFeedbackConfig(service: service));
+    expect(find.text('Email (optional)'), findsNothing);
+    expect(
+      tester.widget<TextField>(find.byType(TextField).first).controller!.text,
+      '建议增加倍速',
+      reason: '草稿文字应照常恢复',
+    );
+
+    await tester.ensureVisible(find.text('Submit'));
+    await tester.tap(find.text('Submit'));
+    await tester.pump(); // submit setState
+    await tester.pump(const Duration(milliseconds: 1600)); // auto-close delay
+    await tester.pumpAndSettle(); // dialog exit transition
+
+    expect(service.calls, hasLength(1));
+    expect(service.calls.single['userId'], 'u-1');
+    expect(service.calls.single['email'], isNull,
+        reason: 'email 框隐藏时不应提交草稿里残留的邮箱');
+  });
+
   testWidgets('restores content, email and type after closing via the X button',
       (tester) async {
     final service = _RecordingService();
@@ -234,6 +440,11 @@ void main() {
     await tester.tap(find.text('Bug'));
     await tester.enterText(find.byType(TextField).first, '播放器在第二课卡住了');
     await tester.enterText(find.byType(TextField).last, 'user@example.com');
+    // 聚焦中的 email 框会持续把自己滚回可视区，先失焦再滚回顶部的关闭按钮。
+    FocusManager.instance.primaryFocus?.unfocus();
+    await tester.pump();
+    await tester.ensureVisible(find.byIcon(Icons.close));
+    await tester.pumpAndSettle();
     await tester.tap(find.byIcon(Icons.close), warnIfMissed: false);
     await tester.pumpAndSettle(); // exit transition, dispose 停入草稿
 

@@ -3,8 +3,9 @@ description: >-
   An in-app feedback dialog for Flutter backed by Firebase. Feedback type
   selection, screenshot attachments (embedded into Firestore documents by
   default, or uploaded to Firebase Storage), automatic page capture,
-  anonymous device id, and built-in zh/en/ja strings.
-version: 1.0.1
+  anonymous device id, optional user id correlation, and built-in zh/en/ja
+  strings.
+version: 1.1.0
 repository: https://github.com/zhixiakj/simple_feedback
 issue_tracker: https://github.com/zhixiakj/simple_feedback/issues
 topics:

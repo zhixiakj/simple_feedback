@@ -14,6 +14,7 @@ class SimpleFeedbackButton extends StatelessWidget {
   const SimpleFeedbackButton({
     super.key,
     required this.source,
+    this.userId,
     this.sourceData,
     this.metadata,
     this.screenshotKey,
@@ -27,6 +28,11 @@ class SimpleFeedbackButton extends StatelessWidget {
 
   /// Recorded with the submission (page name / screen id).
   final String source;
+
+  /// Host app's user id, recorded as the `userId` field; when given, the
+  /// optional email input hides by default
+  /// (see [SimpleFeedbackConfig.emailVisibility]).
+  final String? userId;
 
   /// Read-only context submitted as `sourceData`.
   final String? sourceData;
@@ -61,6 +67,7 @@ class SimpleFeedbackButton extends StatelessWidget {
       onTap: () => showSimpleFeedback(
         context,
         source: source,
+        userId: userId,
         sourceData: sourceData,
         metadata: metadata,
         screenshotKey: screenshotKey,

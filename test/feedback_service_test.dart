@@ -38,6 +38,29 @@ void main() {
         reason: '无上下文不应写 sourceData 字段');
     expect(data.containsKey('email'), isFalse,
         reason: '未填邮箱不应写 email 字段');
+    expect(data.containsKey('userId'), isFalse,
+        reason: '未传用户 id 不应写 userId 字段');
+  });
+
+  test('trims and stores userId; blank userId is omitted', () async {
+    await serviceWith().submit(
+      type: FeedbackType.suggestion,
+      content: '希望支持深色模式',
+      source: 'SettingPage',
+      deviceId: 'dev-1',
+      userId: '  u-123  ',
+    );
+    await serviceWith().submit(
+      type: FeedbackType.suggestion,
+      content: '希望支持浅色模式',
+      source: 'SettingPage',
+      deviceId: 'dev-1',
+      userId: '   ',
+    );
+
+    final docs = (await db.collection('feedback').get()).docs;
+    expect(docs[0].data()['userId'], 'u-123');
+    expect(docs[1].data().containsKey('userId'), isFalse);
   });
 
   test('merges metadata as-is into the document', () async {

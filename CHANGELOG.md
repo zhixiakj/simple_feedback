@@ -1,3 +1,26 @@
+## 1.1.0
+
+* Optional developer-supplied `userId`: pass it per call
+  (`showSimpleFeedback(userId: ...)` / `SimpleFeedbackButton(userId: ...)`)
+  or globally (`SimpleFeedbackConfig(userId: ...)`); per call wins. Recorded
+  as the `userId` field on every feedback document so submissions can be
+  correlated with real users. Blank/whitespace values are treated as absent.
+* New `FeedbackEmailVisibility` enum (`always` / `hideWithUserId` /
+  `never`) via `SimpleFeedbackConfig.emailVisibility`. Default
+  `hideWithUserId`: the optional email input hides automatically once a
+  `userId` is attached — no extra configuration needed; use `always` to keep
+  collecting a reply-to address anyway, `never` to drop the input entirely.
+* A per-call `showSimpleFeedback(config: ...)` now **merges with the global
+  config field-by-field** — only the fields you set are overridden,
+  everything else is inherited from `SimpleFeedback.configure`. (Previously
+  it replaced the global config entirely, silently dropping the global
+  colors/collection/service/... and falling back to package defaults.)
+* When the email input is hidden, a stale draft email restored from a
+  previous session is no longer submitted.
+* The submit button now uses a solid `primary` color instead of a gradient;
+  `FeedbackColors.primaryContainer` no longer affects it (it still tones the
+  success icon).
+
 ## 1.0.1
 
 * Fix README install example to use `^1.0.0`.

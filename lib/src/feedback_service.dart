@@ -74,6 +74,7 @@ class FeedbackService {
     required String content,
     required String source,
     required String deviceId,
+    String? userId,
     String? email,
     String? sourceData,
     Map<String, dynamic>? metadata,
@@ -114,6 +115,7 @@ class FeedbackService {
 
     final trimmedContext = sourceData?.trim();
     final trimmedEmail = email?.trim();
+    final trimmedUserId = userId?.trim();
     final data = <String, dynamic>{
       'type': type.value,
       'content': content,
@@ -121,6 +123,8 @@ class FeedbackService {
       'deviceId': deviceId,
       'platform': _platformName(),
       'createdAt': FieldValue.serverTimestamp(),
+      if (trimmedUserId != null && trimmedUserId.isNotEmpty)
+        'userId': trimmedUserId,
       if (trimmedEmail != null && trimmedEmail.isNotEmpty)
         'email': trimmedEmail,
       if (trimmedContext != null && trimmedContext.isNotEmpty)

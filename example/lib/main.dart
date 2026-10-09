@@ -78,6 +78,12 @@ class DemoPage extends StatefulWidget {
 class _DemoPageState extends State<DemoPage> {
   final _boundaryKey = GlobalKey();
 
+  /// Simulated login state: when set, the id is passed as `userId` so the
+  /// submission can be correlated with the user — and (by default) the
+  /// optional email input hides since the developer already knows who is
+  /// reporting. See SimpleFeedbackConfig.emailVisibility to change that.
+  String? _userId = 'u-42';
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -110,10 +116,35 @@ class _DemoPageState extends State<DemoPage> {
                 widget.onLocaleChanged(selection.first),
           ),
           const SizedBox(height: 8),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      _userId == null
+                          ? 'Signed out — the dialog asks for an email.'
+                          : 'Signed in as $_userId — the email input hides.',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  TextButton(
+                    onPressed: () =>
+                        setState(() => _userId = _userId == null ? 'u-42' : null),
+                    child: Text(_userId == null ? 'Sign in' : 'Sign out'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
           FilledButton(
             onPressed: () => showSimpleFeedback(
               context,
               source: 'DemoPage',
+              userId: _userId,
               metadata: const {'appVersion': '1.0.0'},
             ),
             child: const Text('Open feedback dialog'),
@@ -140,6 +171,7 @@ class _DemoPageState extends State<DemoPage> {
                       onPressed: () => showSimpleFeedback(
                         context,
                         source: 'DemoCard',
+                        userId: _userId,
                         sourceData: 'card: demo\nlocale: ${widget.locale}',
                         screenshotKey: _boundaryKey,
                       ),

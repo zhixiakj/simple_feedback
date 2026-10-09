@@ -15,6 +15,10 @@ the console.
 - ✉️ Optional contact-email field above the submit button — the copy invites
   users to leave an address so you can follow up (some issues need more than
   one sentence to explain); written as `email` when filled, omitted when blank
+- 👤 Optional developer-supplied `userId` recorded on every submission, so
+  feedback can be correlated with real users; by default the email input
+  hides once a `userId` is attached (configurable via
+  `FeedbackEmailVisibility`)
 - 📸 Up to 4 screenshot attachments:
   - automatic capture of the current page (pass a `RepaintBoundary` key),
   - gallery picker (compressed on the platform side, then re-encoded)
@@ -141,6 +145,7 @@ Open the dialog from anywhere:
 showSimpleFeedback(
   context,
   source: 'HomePage',                        // recorded as `source`
+  userId: session.userId,                    // optional: recorded as `userId`
   metadata: {'appVersion': '3.2.1'},         // merged into the document
 );
 ```
@@ -150,6 +155,60 @@ Or drop in a ready-made button:
 ```dart
 SimpleFeedbackButton(source: 'HomePage')
 ```
+
+### Associating feedback with users
+
+Pass your app's user id and every submission records it as the `userId`
+field — much more actionable than the anonymous `deviceId` alone:
+
+```dart
+showSimpleFeedback(context, source: 'HomePage', userId: session.userId);
+SimpleFeedbackButton(source: 'HomePage', userId: session.userId);
+```
+
+You can also set it once globally instead of per call:
+
+```dart
+SimpleFeedback.configure(SimpleFeedbackConfig(userId: session.userId));
+```
+
+A per-call `userId` overrides the global one; call `SimpleFeedback.configure`
+again on login/logout to keep the global value in sync.
+
+Once a `userId` is attached, the optional email input hides automatically
+(the default `FeedbackEmailVisibility.hideWithUserId`) — you already know
+who is submitting. Keep collecting a reply-to address anyway with
+`FeedbackEmailVisibility.always`, or drop the input entirely with
+`FeedbackEmailVisibility.never`:
+
+```dart
+showSimpleFeedback(
+  context,
+  source: 'HomePage',
+  userId: session.userId,
+  config: const SimpleFeedbackConfig(
+    emailVisibility: FeedbackEmailVisibility.always,
+  ),
+);
+```
+
+### Per-call configuration
+
+A per-call `config` **merges with the global config field-by-field** —
+only the fields you set are overridden; everything else (colors,
+collection, service, ...) is inherited from `SimpleFeedback.configure`:
+
+```dart
+// global: branded colors + custom collection; per call: only strings
+showSimpleFeedback(
+  context,
+  source: 'HomePage',
+  config: SimpleFeedbackConfig(strings: stringsFor(currentLocale)),
+);
+```
+
+Note that `null` means "inherit the global value" — to change a globally
+set field for a single call, pass an explicit different value.
 
 To let users attach a capture of the current page, wrap the page (or a
 specific card) in a `RepaintBoundary` and pass its key:
@@ -182,6 +241,7 @@ Every submission writes one document to the `feedback` collection:
 | `content`    | string   | user description (max `maxContentLength`)        |
 | `source`     | string   | page/screen name passed by the caller            |
 | `deviceId`   | string   | anonymous per-install id                         |
+| `userId`     | string   | developer-supplied user id, if provided          |
 | `platform`   | string   | `ios` / `android` / ...                          |
 | `createdAt`  | timestamp | server timestamp                                |
 | `sourceData` | string   | read-only context block, if provided             |
@@ -282,7 +342,8 @@ Two ways to hand it over:
 - **Startup (global):** `SimpleFeedback.configure(...)` as above — the
   strings are then fixed for the whole session.
 - **Per call (dynamic):** if your app switches languages at runtime *and*
-  uses custom strings, pass a config per call:
+  uses custom strings, pass a config per call — it merges with the global
+  config, so the global colors/collection/... stay active:
 
   ```dart
   showSimpleFeedback(

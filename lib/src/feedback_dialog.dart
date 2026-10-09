@@ -9,6 +9,7 @@ import 'package:image_picker/image_picker.dart';
 import 'feedback_config.dart';
 import 'feedback_device_id.dart';
 import 'feedback_draft.dart';
+import 'feedback_email_visibility.dart';
 import 'feedback_service.dart';
 import 'feedback_strings.dart';
 import 'feedback_type.dart';
@@ -16,21 +17,35 @@ import 'feedback_type.dart';
 /// Opens the feedback dialog.
 ///
 /// [source] is recorded with the submission (e.g. the page name the button
-/// sits on). [metadata] is written to the Firestore document as-is — use it
-/// for app version, user id, experiment flags, etc. [screenshotKey] is the
-/// [GlobalKey] of a [RepaintBoundary] wrapping the current page; when given,
-/// the page is captured as the first screenshot before the dialog opens.
+/// sits on). [userId] is the host app's own user id — when given it is
+/// recorded as the `userId` field so feedback can be correlated with real
+/// users, and (by default) the optional email input hides since the
+/// developer already knows who is submitting; see
+/// [SimpleFeedbackConfig.emailVisibility]. [metadata] is written to the
+/// Firestore document as-is — use it for app version, experiment flags,
+/// etc. [screenshotKey] is the [GlobalKey] of a [RepaintBoundary] wrapping
+/// the current page; when given, the page is captured as the first
+/// screenshot before the dialog opens.
 ///
-/// Uses the global [SimpleFeedback.config] unless [config] is passed.
+/// A per-call [config] merges with the global [SimpleFeedback.config]
+/// field-by-field — only the fields you set are overridden, everything
+/// else (colors, collection, service, ...) is inherited from the global
+/// config.
 Future<void> showSimpleFeedback(
   BuildContext context, {
   required String source,
+  String? userId,
   String? sourceData,
   Map<String, dynamic>? metadata,
   GlobalKey? screenshotKey,
   SimpleFeedbackConfig? config,
 }) async {
-  final cfg = config ?? SimpleFeedback.config;
+  final cfg = (config ?? SimpleFeedback.config).merge(SimpleFeedback.config);
+
+  // 调用处优先于全局配置；纯空白的 id 视同未传。
+  final effectiveUserId = (userId ?? cfg.userId)?.trim();
+  final resolvedUserId =
+      (effectiveUserId != null && effectiveUserId.isEmpty) ? null : effectiveUserId;
 
   Uint8List? screenshot;
   if (screenshotKey != null) {
@@ -47,6 +62,7 @@ Future<void> showSimpleFeedback(
       insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
       child: _FeedbackModal(
         source: source,
+        userId: resolvedUserId,
         sourceData: sourceData,
         metadata: metadata,
         screenshotKey: screenshotKey,
@@ -124,6 +140,10 @@ FeedbackStrings _resolveStrings(
 class _FeedbackModal extends StatefulWidget {
   final String source;
 
+  /// Host app's user id, recorded as the `userId` field. `null` = the
+  /// submitter stays anonymous (only the device id is recorded).
+  final String? userId;
+
   /// Read-only context submitted as the `sourceData` field, kept strictly
   /// separate from the user-typed content.
   final String? sourceData;
@@ -142,6 +162,7 @@ class _FeedbackModal extends StatefulWidget {
 
   const _FeedbackModal({
     required this.source,
+    this.userId,
     this.sourceData,
     this.metadata,
     this.screenshotKey,
@@ -229,6 +250,15 @@ class _FeedbackModalState extends State<_FeedbackModal>
     super.dispose();
   }
 
+  /// Whether the optional email input is rendered. When hidden, any draft
+  /// email restored into [_emailController] is deliberately ignored on
+  /// submit — the developer already knows who is submitting.
+  bool get _showEmail => switch (widget.config.emailVisibility) {
+        FeedbackEmailVisibility.always => true,
+        FeedbackEmailVisibility.never => false,
+        FeedbackEmailVisibility.hideWithUserId => widget.userId == null,
+      };
+
   Future<void> _submit() async {
     final content = _controller.text.trim();
     if (content.isEmpty) {
@@ -248,8 +278,9 @@ class _FeedbackModalState extends State<_FeedbackModal>
         content: content,
         source: widget.source,
         deviceId: deviceId,
+        userId: widget.userId,
         sourceData: widget.sourceData,
-        email: email.isEmpty ? null : email,
+        email: _showEmail && email.isNotEmpty ? email : null,
         metadata: widget.metadata,
         images: _images,
         imageStorage: widget.config.imageStorage,
@@ -846,48 +877,50 @@ class _FeedbackModalState extends State<_FeedbackModal>
             const SizedBox(height: 12),
 
             // ── Email (optional) ──
-            Text(
-              strings.emailLabel,
-              style: textTheme.labelMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-                letterSpacing: 0.5,
-                color: palette.onSurfaceVariant,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              strings.emailHint,
-              style: textTheme.labelSmall?.copyWith(
-                height: 1.4,
-                color: palette.onSurfaceVariant.withValues(alpha: 0.6),
-              ),
-            ),
-            const SizedBox(height: 10),
-            Container(
-              decoration: BoxDecoration(
-                color: palette.surfaceLow,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                    color: palette.outlineVariant.withValues(alpha: 0.3)),
-              ),
-              child: TextField(
-                controller: _emailController,
-                focusNode: _emailFocusNode,
-                onTapOutside: (_) => _emailFocusNode.unfocus(),
-                keyboardType: TextInputType.emailAddress,
-                autocorrect: false,
-                style: textTheme.bodyLarge?.copyWith(
-                  color: palette.onSurface,
-                  height: 1.5,
-                ),
-                decoration: const InputDecoration(
-                  border: InputBorder.none,
-                  filled: false,
-                  contentPadding:
-                      EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            if (_showEmail) ...[
+              Text(
+                strings.emailLabel,
+                style: textTheme.labelMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.5,
+                  color: palette.onSurfaceVariant,
                 ),
               ),
-            ),
+              const SizedBox(height: 4),
+              Text(
+                strings.emailHint,
+                style: textTheme.labelSmall?.copyWith(
+                  height: 1.4,
+                  color: palette.onSurfaceVariant.withValues(alpha: 0.6),
+                ),
+              ),
+              const SizedBox(height: 10),
+              Container(
+                decoration: BoxDecoration(
+                  color: palette.surfaceLow,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                      color: palette.outlineVariant.withValues(alpha: 0.3)),
+                ),
+                child: TextField(
+                  controller: _emailController,
+                  focusNode: _emailFocusNode,
+                  onTapOutside: (_) => _emailFocusNode.unfocus(),
+                  keyboardType: TextInputType.emailAddress,
+                  autocorrect: false,
+                  style: textTheme.bodyLarge?.copyWith(
+                    color: palette.onSurface,
+                    height: 1.5,
+                  ),
+                  decoration: const InputDecoration(
+                    border: InputBorder.none,
+                    filled: false,
+                    contentPadding:
+                        EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  ),
+                ),
+              ),
+            ],
             const SizedBox(height: 20),
 
             // ── Submit ──
@@ -898,13 +931,7 @@ class _FeedbackModalState extends State<_FeedbackModal>
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: _isSubmitting
-                        ? [palette.surfaceLow, palette.surfaceLow]
-                        : [palette.primaryContainer, palette.primary],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
+                  color: _isSubmitting ? palette.surfaceLow : palette.primary,
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: _isSubmitting
                       ? []
