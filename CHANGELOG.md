@@ -1,3 +1,12 @@
+## 1.1.2
+
+* README: added an "Admin console" section introducing the companion
+  [simple_feedback_admin](https://github.com/zhixiakj/simple_feedback_admin)
+  web app. Submissions can be read directly in the Firebase console or
+  through it; the advantage of the web app: attached screenshots render in
+  the browser, and feedback can be operated on — searched, filtered, marked
+  resolved, deleted.
+
 ## 1.1.1
 
 * Fixed the "Buy me a coffee" QR images in the README not rendering on
