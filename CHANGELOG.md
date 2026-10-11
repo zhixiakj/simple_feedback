@@ -1,3 +1,9 @@
+## 1.1.3
+
+* Updated the pub.dev description: it now mentions that the package is
+  free and that screenshots are embedded into Firestore documents by
+  default.
+
 ## 1.1.2
 
 * README: added an "Admin console" section introducing the companion
